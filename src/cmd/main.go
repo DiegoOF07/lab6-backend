@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-    db, err := database.SetupDatabase("../database/series.db")
+    db, err := database.SetupDatabase("series.db")
     if err != nil {
         log.Fatal("CRITICAL: No se pudo conectar a la base de datos:", err)
     }

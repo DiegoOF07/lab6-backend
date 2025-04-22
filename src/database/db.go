@@ -22,7 +22,12 @@ func SetupDatabase(dbPath string) (*sql.DB, error) {
         return nil, err
     }
 
-    ddlBytes, err := os.ReadFile("../database/ddl.sql")
+    ddlPath := os.Getenv("DDL_PATH")
+    if ddlPath == "" {
+        ddlPath = "./ddl.sql" // Valor por defecto
+    }
+
+    ddlBytes, err := os.ReadFile(ddlPath)
 	if err != nil {
 		log.Fatalf("Error al leer el archivo DDL: %v", err)
 	}

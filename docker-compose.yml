@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data  # Persistencia para SQLite
+      - ./src/database/ddl.sql:/app/ddl.sql:ro
+    environment:
+      - DB_PATH=/app/data/series.db
+      - DDL_PATH=/app/ddl.sql
+    restart: unless-stopped
