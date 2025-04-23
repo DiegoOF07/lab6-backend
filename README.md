@@ -15,3 +15,4 @@ docker-compose up --build
 ```
 
 ## Imagen del frontend corriendo con el api
+<img src="https://github.com/DiegoOF07/lab6-backend/blob/main/assets/frontend_working_with_api.png" alt="frontend-funcionando">
