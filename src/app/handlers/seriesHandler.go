@@ -194,6 +194,198 @@ func DeleteSeriesHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		w.WriteHeader(http.StatusNoContent)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(result)
 	}
 }
+
+//Handlers para los aspectos que valen punteo
+
+func UpdateSeriesStatusHandler(db *sql.DB) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        idStr := chi.URLParam(r, "id")
+        id, err := strconv.Atoi(idStr)
+        if err != nil {
+            http.Error(w, "ID debe ser un número entero", http.StatusBadRequest)
+            return
+        }
+
+        var updateData struct {
+            Status string `json:"status"`
+        }
+        err = json.NewDecoder(r.Body).Decode(&updateData)
+        if err != nil {
+            http.Error(w, "Datos inválidos", http.StatusBadRequest)
+            return
+        }
+
+        validStatus := map[string]bool{
+            "Plan to Watch": true, 
+			"Watching": true, 
+            "Completed": true,
+			"Dropped": true,
+        }
+        if !validStatus[updateData.Status] {
+            http.Error(w, "Estado no válido", http.StatusBadRequest)
+            return
+        }
+
+        var updatedSeries models.SeriesModel
+        err = db.QueryRow(`
+            UPDATE series SET status = ? 
+            WHERE id = ? 
+            RETURNING id, title, status, episodes, last_episode, ranking`,
+            updateData.Status, id,
+        ).Scan(
+            &updatedSeries.ID, &updatedSeries.Title, &updatedSeries.Status,
+            &updatedSeries.Episodes, &updatedSeries.LastEpisode, &updatedSeries.Ranking,
+        )
+
+        if err == sql.ErrNoRows {
+            http.Error(w, "Serie no encontrada", http.StatusNotFound)
+            return
+        }
+        if err != nil {
+            http.Error(w, "Error al actualizar: "+err.Error(), http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(updatedSeries)
+    }
+}
+
+func IncrementEpisodeHandler(db *sql.DB) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        idStr := chi.URLParam(r, "id")
+        id, err := strconv.Atoi(idStr)
+        if err != nil {
+            http.Error(w, "ID debe ser un número entero", http.StatusBadRequest)
+            return
+        }
+
+        tx, err := db.Begin()
+        if err != nil {
+            http.Error(w, "Error al iniciar transacción", http.StatusInternalServerError)
+            return
+        }
+        defer tx.Rollback()
+
+        var totalEpisodes, lastEpisode int
+        err = tx.QueryRow(`
+            SELECT episodes, last_episode FROM series WHERE id = ?`,
+            id,
+        ).Scan(&totalEpisodes, &lastEpisode)
+        
+        if err == sql.ErrNoRows {
+            http.Error(w, "Serie no encontrada", http.StatusNotFound)
+            return
+        }
+        if err != nil {
+            http.Error(w, "Error al consultar serie", http.StatusInternalServerError)
+            return
+        }
+
+        if lastEpisode >= totalEpisodes {
+            http.Error(w, "No hay más episodios disponibles", http.StatusBadRequest)
+            return
+        }
+
+        var updatedSeries models.SeriesModel
+        err = tx.QueryRow(`
+            UPDATE series SET last_episode = last_episode + 1 
+            WHERE id = ? 
+            RETURNING id, title, status, episodes, last_episode, ranking`,
+            id,
+        ).Scan(
+            &updatedSeries.ID, &updatedSeries.Title, &updatedSeries.Status,
+            &updatedSeries.Episodes, &updatedSeries.LastEpisode, &updatedSeries.Ranking,
+        )
+        
+        if err != nil {
+            http.Error(w, "Error al actualizar", http.StatusInternalServerError)
+            return
+        }
+
+        if err = tx.Commit(); err != nil {
+            http.Error(w, "Error al confirmar cambios", http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(updatedSeries)
+    }
+}
+
+func UpvoteSeriesHandler(db *sql.DB) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        idStr := chi.URLParam(r, "id")
+        id, err := strconv.Atoi(idStr)
+        if err != nil {
+            http.Error(w, "ID debe ser un número entero", http.StatusBadRequest)
+            return
+        }
+
+        var updatedSeries models.SeriesModel
+        err = db.QueryRow(`
+            UPDATE series SET ranking = ranking + 1 
+            WHERE id = ? 
+            RETURNING id, title, status, episodes, last_episode, ranking`,
+            id,
+        ).Scan(
+            &updatedSeries.ID, &updatedSeries.Title, &updatedSeries.Status,
+            &updatedSeries.Episodes, &updatedSeries.LastEpisode, &updatedSeries.Ranking,
+        )
+
+        if err == sql.ErrNoRows {
+            http.Error(w, "Serie no encontrada", http.StatusNotFound)
+            return
+        }
+        if err != nil {
+            http.Error(w, "Error al actualizar ranking", http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(updatedSeries)
+    }
+}
+
+func DownvoteSeriesHandler(db *sql.DB) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        idStr := chi.URLParam(r, "id")
+        id, err := strconv.Atoi(idStr)
+        if err != nil {
+            http.Error(w, "ID debe ser un número entero", http.StatusBadRequest)
+            return
+        }
+
+        var updatedSeries models.SeriesModel
+        err = db.QueryRow(`
+            UPDATE series SET ranking = CASE 
+                WHEN ranking > 0 THEN ranking - 1 
+                ELSE 0 
+            END
+            WHERE id = ? 
+            RETURNING id, title, status, episodes, last_episode, ranking`,
+            id,
+        ).Scan(
+            &updatedSeries.ID, &updatedSeries.Title, &updatedSeries.Status,
+            &updatedSeries.Episodes, &updatedSeries.LastEpisode, &updatedSeries.Ranking,
+        )
+
+        if err == sql.ErrNoRows {
+            http.Error(w, "Serie no encontrada", http.StatusNotFound)
+            return
+        }
+        if err != nil {
+            http.Error(w, "Error al actualizar ranking", http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(updatedSeries)
+    }
+}
+

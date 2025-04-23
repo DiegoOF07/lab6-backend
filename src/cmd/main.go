@@ -30,10 +30,14 @@ func main() {
 			r.Get("/", handlers.GetSeriesHandler(db))  
 			r.Post("/", handlers.PostSeriesHandler(db))
 		})
-		r.Route("/serie/{id}", func(r chi.Router) {
+		r.Route("/series/{id}", func(r chi.Router) {
 			r.Get("/", handlers.GetSeriesByIdHandler(db))
 			r.Put("/",handlers.PutSeriesHandler(db))
 			r.Delete("/", handlers.DeleteSeriesHandler(db))
+			r.Patch("/status", handlers.UpdateSeriesStatusHandler(db))
+			r.Patch("/episode", handlers.IncrementEpisodeHandler(db))
+			r.Patch("/upvote", handlers.UpvoteSeriesHandler(db))
+			r.Patch("/downvote", handlers.DownvoteSeriesHandler(db))
 		})
 	})
 
